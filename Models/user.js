@@ -19,10 +19,6 @@ const User = sequelize.define("User", {
     type: DataTypes.STRING,
     allowNull: false,
   },
-  fullName: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
   birthDate: {
     type: DataTypes.DATE,
     allowNull: true,
@@ -43,12 +39,26 @@ const User = sequelize.define("User", {
     type: DataTypes.STRING,
     allowNull: true,
   },
+
+  fullName: {
+    type: DataTypes.VIRTUAL,
+    get() {
+      return `${this.firstName} ${this.lastName}`;
+    },
+  },
+
   aboutMe: {
     type: DataTypes.TEXT,
     allowNull: true,
   },
   password: {
     type: DataTypes.STRING,
+    allowNull: false,
+  },
+
+  isValidated: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
     allowNull: false,
   },
 });

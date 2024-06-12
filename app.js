@@ -14,7 +14,7 @@ sequelize
   .then(() => {
     console.log("Connection has been established successfully.");
     // sequelize.sync({ force: true }).then(() => {
-    //     console.log("Tables created succcessfully");
+    //   console.log("Tables created succcessfully");
     // });
   })
   .catch((err) => {

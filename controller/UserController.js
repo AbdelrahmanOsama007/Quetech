@@ -1,22 +1,12 @@
 const joi = require("joi");
 const bcrypt = require("bcryptjs");
 const User = require("../Models/user");
+const Otp = require("../Models/otp");
+
+const { sendOtpEmail } = require("../utils/sendEmail");
 const registerUser = async (req, res) => {
   try {
     const { firstName, lastName, email, password, passwordConfirm } = req.body;
-
-    const errors = validateRegister({
-      firstName,
-      lastName,
-      email,
-      password,
-      passwordConfirm,
-    });
-    console.log(errors);
-    if (errors)
-      return res
-        .status(400)
-        .json({ message: "Erorr validating request body", errors, data: null });
 
     const doesExist = await User.findOne({
       where: { email: email },
@@ -62,43 +52,108 @@ const registerUser = async (req, res) => {
   }
 };
 
-const validateRegister = (registerBody) => {
-  const validateObject = joi.object({
-    firstName: joi.string().max(30).required(),
-    lastName: joi.string().required().max(30),
-    password: joi.string().min(8).required(),
-    passwordConfirm: joi.string().min(8).required(),
-    email: joi.string().email(),
-  });
+var generateOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  const validationResult = validateObject.validate(registerBody);
+    var user = await User.findByPk(id, { attributes: ["isValidated"] });
 
-  if (validationResult.error) return validationResult.error.details;
-  return null;
+    if (!user)
+      return res
+        .status(404)
+        .json({ message: `User with the following '${id}' does not exist` });
+
+    if (user.isValidated)
+      return res.status(400).json({
+        message: "User has already been validated",
+        data: null,
+        errors: null,
+      });
+
+    user = await User.findByPk(id, {
+      attributes: { exclude: ["*"] },
+      include: {
+        model: Otp,
+        as: "otps",
+        limit: 1,
+        order: [["createdAt", "desc"]],
+      },
+    });
+
+    const lastGeneratedOtp = user.otps.length ? user.otps[0] : {};
+
+    if (lastGeneratedOtp) {
+      const timeBetween =
+        new Date().getTime() - new Date(lastGeneratedOtp.createdAt).getTime();
+
+      if (Math.floor(timeBetween / 1000) <= 60)
+        return res.status(400).json({
+          message: `An otp has already been issued for the user with the following id '${id}' and is still valid`,
+          data: null,
+          errors: null,
+        });
+    }
+
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    await Otp.create({
+      otp_text: otp,
+      userId: id,
+    });
+
+    await sendOtpEmail("mohannedahmed15@gmail.com", otp);
+    res.status(200).json({
+      message: "OTP sent successfully and is valid for 60 seconds",
+      data: null,
+      errors: null,
+    });
+  } catch (error) {
+    console.log(error);
+    res
+      .status(500)
+      .json({ message: "Internal Server Error", data: null, errors: null });
+  }
 };
 
-const validateLoginUser = (loginBody) => {
-  const validateObject = joi.object({
-    email: joi.string().email().required(),
-    password: joi.string().required(),
-  });
+const validateOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otp_text } = req.body;
 
-  const validationResult = validateObject.validate(loginBody);
+    const user = await User.findByPk(id, { attributes: ["id", "isValidated"] });
 
-  if (validationResult.error) return validationResult.error.details;
-  return null;
+    if (!user)
+      return res.status(404).json({
+        message: `User with the following id '${id}' does not exist`,
+        data: null,
+        errors: null,
+      });
+
+    if (user.isValidated)
+      return res.status(400).json({
+        message: "User has already been validated",
+        data: null,
+        errors: null,
+      });
+
+    user = await User.findByPk(id, {
+      attributes: { exclude: ["*"] },
+      include: {
+        model: Otp,
+        as: "otps",
+        limit: 1,
+        order: [["createdAt", "desc"]],
+      },
+    });
+
+    const lastGeneratedOtp = user.otps.length ? user.otps[0] : {};
+
+    if(!lastGeneratedOtp) return res.status(400).json()
+  } catch (error) {}
 };
 
 var loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    const errors = validateLoginUser({ email, password });
-
-    if (validateLoginUser({ email, password }))
-      return res
-        .json(400)
-        .json({ message: "Error validating body", errors, data: null });
 
     const user = await User.findOne({
       where: { email },
@@ -129,4 +184,39 @@ var loginUser = async (req, res) => {
   }
 };
 
-module.exports = { loginUser, registerUser };
+var viewProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByPk(id, {
+      attributes: { exclude: ["password"] },
+    });
+
+    if (!user)
+      return res.status(404).json({
+        message: `User with the following id '${id}' is not found `,
+        data: null,
+        errors: null,
+      });
+
+    res.status(200).json({
+      message: "User found successfully",
+      data: { user },
+      errors: null,
+    });
+  } catch (error) {
+    console.log(error.message);
+    res.status(500).json({
+      message: "Internal Server Error",
+      data: null,
+      errors: { error },
+    });
+  }
+};
+
+var editProfile = async (req, res) => {
+  try {
+  } catch (error) {}
+};
+
+module.exports = { loginUser, registerUser, viewProfile, generateOtp };
